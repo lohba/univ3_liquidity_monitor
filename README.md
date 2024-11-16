@@ -1,1 +1,2 @@
-# univ3_liquidity_monitor
+# Overview
+This script monitors a wstETH/ETH Uniswap V3 position and alerts via Telegram when action is needed. It tracks key metrics like price range, gas costs, and pool activity to help maintain profitable liquidity provision. The goal is simple: stay in range to earn fees while minimizing rebalancing costs.
