@@ -3,7 +3,7 @@ Our objective is to efficiently manage a $1 million liquidity position in the ws
 
 ## Position Strategy
 - Allocate 45% to wstETH, 45% to ETH, and 10% for operational reserves.
-- Set a conservative ±0.25% range from the mid-price of wstETH/ETH. The range was set to maximize time in range and yield from backtesting data from [revert.finance](https://revert.finance/#/initiator?network=mainnet&exchange=uniswapv3&token1=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2-native&token0=0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0)
+- Set a conservative ±0.25% range from the mid-price of wstETH/ETH. The range was set to maximize time in range and yield based on backtesting data from [revert.finance](https://revert.finance/#/initiator?network=mainnet&exchange=uniswapv3&token1=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2-native&token0=0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0)
 
 ## Rebalancing Strategy
 Position adjustment involves assessing the need for rebalancing based on alerts and market conditions. We will use a multi-sig wallet and require multiple signers for any on-chain activity. We will conduct frequent backtesting to evaluate the profitability of our price ranges. This enables us to improve our allocation and rebalancing strategies using empiracle data and market trends. We manage risks by continuously monitoring market volatility, adjusting price ranges, or temporarily withdrawing liquidity during extreme conditions.

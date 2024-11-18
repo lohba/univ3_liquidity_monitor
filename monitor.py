@@ -20,10 +20,10 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY")
 
-# Mock position configuration
+# Mock position configuration priced in wsteth based on current mid-price
 MOCK_POSITION = {
-   'lower_price': 0.82,  # Fixed lower bound
-   'upper_price': 0.86,  # Fixed upper bound
+   'lower_price': 0.83832102,  # Fixed lower bound
+   'upper_price': 0.84252314,  # Fixed upper bound
 }
 
 # Define thresholds for alerts
