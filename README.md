@@ -1,5 +1,5 @@
 # Overview
-Our objective is to efficiently manage a $1 million liquidity position in the wstETH/ETH Uniswap V3 pool This script monitors the position and alerts via Telegram when action is needed. The system tracks key metrics like price bounds, pool activity, and gas price to balance yields with rebalancing costs.
+Our objective is to efficiently manage a $1 million liquidity position in the wstETH/ETH Uniswap V3 pool. This script monitors the position and alerts via Telegram when action is needed. The system tracks key metrics like price bounds, pool activity, and gas price to balance yields with rebalancing costs.
 
 ## Position Strategy
 - Allocate 45% to wstETH, 45% to ETH, and 10% for operational reserves.
