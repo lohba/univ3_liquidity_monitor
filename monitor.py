@@ -7,6 +7,24 @@ import requests
 
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY")
+WSTETH_ETH_POOL = "0x109830a1aaad605bbf02a9dfa7b0b92ec2fb7daa"
+
+# Mock position configuration
+MOCK_POSITION = {
+   'lower_price': 0.82,  # Fixed lower bound
+   'upper_price': 0.86,  # Fixed upper bound
+}
+
+# Define thresholds for alerts
+TOLERANCE_MARGIN = 0.0005  # Tolerance for minor price fluctuations
+SIGNIFICANT_RATIO_CHANGE = 0.003  # 0.3% ratio change threshold
+SIGNIFICANT_TVL_CHANGE = 0.05  # 5% TVL change threshold
+
+# Track last values to avoid redundant alerts
+last_price = None
+last_volume = None
+last_ratio = None
+last_tvl = None
 
 def get_gas_status():
     """Check if current gas price is lower or higher than the 3-day average."""
@@ -70,6 +88,135 @@ def check_tvl(client):
         print(f"Error checking TVL: {e}")
         return None
 
+def check_position(client):
+   """Check position status and alert on significant changes"""
+   global last_price, last_volume, last_ratio
+   query = gql('''
+   {
+       pool(id: "0x109830a1aaad605bbf02a9dfa7b0b92ec2fb7daa") {
+           token0Price
+           volumeUSD
+           poolDayData(first: 2, orderBy: date, orderDirection: desc) {
+               volumeUSD
+           }
+       }
+   }
+   ''')
+
+   alerts = []
+   try:
+       # Fetch pool data
+       result = client.execute(query)
+       current_price = float(result['pool']['token0Price'])
+
+       # Debug print for current price
+       print(f"[Price Check] Current Price: {current_price} ETH")
+
+       # Check if the price is within the set mock range with tolerance
+       in_range = (MOCK_POSITION['lower_price'] * (1 - TOLERANCE_MARGIN) <= current_price <= MOCK_POSITION['upper_price'] * (1 + TOLERANCE_MARGIN))
+       
+       # Add early warning for approaching bounds (1% buffer)
+       APPROACH_BUFFER = 0.01  # 1% buffer zone
+       lower_approach = MOCK_POSITION['lower_price'] * (1 + APPROACH_BUFFER)
+       upper_approach = MOCK_POSITION['upper_price'] * (1 - APPROACH_BUFFER)
+       
+       # Check if price is approaching bounds while still in range
+       if in_range:
+           if current_price <= lower_approach:
+               alert_msg = (
+                   "⚠️ <b>Price Approaching Lower Bound</b>\n"
+                   f"Current: {current_price:.6f}\n"
+                   f"Lower Bound: {MOCK_POSITION['lower_price']:.6f}\n"
+                   "Consider preparing for rebalance"
+               )
+               send_alert(alert_msg)
+           elif current_price >= upper_approach:
+               alert_msg = (
+                   "⚠️ <b>Price Approaching Upper Bound</b>\n"
+                   f"Current: {current_price:.6f}\n"
+                   f"Upper Bound: {MOCK_POSITION['upper_price']:.6f}\n"
+                   "Consider preparing for rebalance"
+               )
+               send_alert(alert_msg)
+
+       # Price alert if out of range and significant change from last alert
+       if last_price is None or abs(current_price - last_price) / last_price >= TOLERANCE_MARGIN:
+           if not in_range:
+               if current_price < MOCK_POSITION['lower_price']:
+                   alert_msg = (
+                       "🚨 <b>CRITICAL: Position Below Range</b>\n"
+                       f"Current Price: {current_price:.6f}\n"
+                       f"Lower Bound: {MOCK_POSITION['lower_price']:.6f}\n"
+                       "Not earning fees! Action required."
+                   )
+                   send_alert(alert_msg)
+               else:
+                   alert_msg = (
+                       "🚨 <b>CRITICAL: Position Above Range</b>\n"
+                       f"Current Price: {current_price:.6f}\n"
+                       f"Upper Bound: {MOCK_POSITION['upper_price']:.6f}\n"
+                       "Not earning fees! Action required."
+                   )
+                   send_alert(alert_msg)
+               print(f"[Alert] Price out of range! Last Alerted Price: {last_price}, New Alert Price: {current_price}")
+               last_price = current_price
+
+       # Real-time volume change check
+       current_volume = float(result['pool']['poolDayData'][0]['volumeUSD'])
+       if last_volume is not None:
+           volume_change = ((current_volume - last_volume) / last_volume) * 100
+           print(f"[Volume Check] Current Volume: {current_volume} USD, Previous Volume: {last_volume} USD, Change: {volume_change:.2f}%")
+           if abs(volume_change) > 10:
+               alert_msg = (
+                   "📊 <b>Significant Volume Change</b>\n"
+                   f"Change: {volume_change:.1f}%\n"
+                   f"Current Volume: ${current_volume:,.2f}\n"
+                   f"Previous Volume: ${last_volume:,.2f}"
+               )
+               send_alert(alert_msg)
+       
+       last_volume = current_volume
+
+       # Ratio change check
+       if last_ratio is not None:
+           ratio_change = abs(current_price - last_ratio) / last_ratio
+           if ratio_change >= SIGNIFICANT_RATIO_CHANGE:
+               alert_msg = (
+                   "📈 <b>Significant Ratio Change</b>\n"
+                   f"Change: {ratio_change * 100:.1f}%\n"
+                   f"Previous: {last_ratio:.6f}\n"
+                   f"Current: {current_price:.6f}"
+               )
+               send_alert(alert_msg)
+               print(f"[Alert] Significant ratio change detected! Previous: {last_ratio}, Current: {current_price}")
+       
+       last_ratio = current_price
+
+       # Gas status check for rebalancing
+       gas_info = None
+       if not in_range:
+           gas_info = get_gas_status()
+           if gas_info and gas_info['status'] == "CHEAP":
+               alert_msg = (
+                   "⛽ <b>Favorable Gas Conditions</b>\n"
+                   f"Current Gas: {gas_info['price']} GWEI\n"
+                   f"3-day Average: {gas_info['avg_gas']:.1f} GWEI\n"
+                   "Good time to rebalance position"
+               )
+               send_alert(alert_msg)
+
+       return {
+           'current_price': current_price,
+           'in_range': in_range,
+           'alerts': alerts
+       }
+
+   except Exception as e:
+       error_msg = f"Error checking position: {e}"
+       print(error_msg)
+       send_alert(f"🔥 <b>Error</b>\n{error_msg}")
+       return None
+   
 def main():
     # Set up the client
     transport = RequestsHTTPTransport(
