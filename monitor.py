@@ -1,13 +1,24 @@
 import os
+from dotenv import load_dotenv
 import time
 from datetime import datetime, timedelta
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
 import requests
+from telegram import Bot
+import asyncio
 
+load_dotenv()
+
+# Constants
+WSTETH_ETH_POOL = "0x109830a1aaad605bbf02a9dfa7b0b92ec2fb7daa"
+CHECK_INTERVAL = 30
+
+# Get keys from env variables
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY")
-WSTETH_ETH_POOL = "0x109830a1aaad605bbf02a9dfa7b0b92ec2fb7daa"
 
 # Mock position configuration
 MOCK_POSITION = {
@@ -26,67 +37,117 @@ last_volume = None
 last_ratio = None
 last_tvl = None
 
-def get_gas_status():
-    """Check if current gas price is lower or higher than the 3-day average."""
+async def send_telegram_alert(message: str):
+   """Send alert to Telegram"""
+   try:
+       bot = Bot(token=TELEGRAM_BOT_TOKEN)
+       await bot.send_message(
+           chat_id=TELEGRAM_CHAT_ID,
+           text=message,
+           parse_mode='HTML'
+       )
+       print(f"Telegram alert sent: {message}")  # Debug log
+   except Exception as e:
+       print(f"Failed to send Telegram alert: {e}")
+async def test_telegram():
+    """Test Telegram connection"""
+    test_msg = "🔔 Testing Telegram connection..."
     try:
-        # Get current gas price
-        response = requests.get(
-            'https://api.etherscan.io/api',
-            params={
-                'module': 'gastracker',
-                'action': 'gasoracle',
-                'apikey': ETHERSCAN_API_KEY
-            }
+        bot = Bot(token=TELEGRAM_BOT_TOKEN)
+        await bot.send_message(
+            chat_id=TELEGRAM_CHAT_ID,
+            text=test_msg,
+            parse_mode='HTML'
         )
-        current_gas = float(response.json()['result']['SafeGasPrice'])
-        
-        # Get the last 3 days of gas data
-        end_date = datetime.now().strftime('%Y-%m-%d')
-        start_date = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d')
-        response = requests.get(
-            'https://api.etherscan.io/api',
-            params={
-                'module': 'stats',
-                'action': 'dailygasoracle',
-                'startdate': start_date,
-                'enddate': end_date,
-                'apikey': ETHERSCAN_API_KEY
-            }
-        )
-        
-        recent_gas = [float(day['SafeGasPrice']) for day in response.json()['result']]
-        avg_gas = sum(recent_gas) / len(recent_gas)
-        
-        status = "CHEAP" if current_gas < avg_gas else "EXPENSIVE"
-        
-        return {
-            'price': current_gas,
-            'avg_gas': avg_gas,
-            'status': status
-        }
+        print("Telegram test successful!")
     except Exception as e:
-        print(f"Error checking gas: {e}")
-        return None
+        print(f"Telegram test failed: {e}")
+
+
+print("Testing Telegram connection...")
+asyncio.run(test_telegram())
+
+def send_alert(message: str):
+   """Synchronous wrapper for sending Telegram alerts"""
+   asyncio.run(send_telegram_alert(message))
+
+def get_gas_status():
+   """Check if current gas price is lower or higher than the 3-day average."""
+   try:
+       # Get current gas price
+       response = requests.get(
+           'https://api.etherscan.io/api',
+           params={
+               'module': 'gastracker',
+               'action': 'gasoracle',
+               'apikey': ETHERSCAN_API_KEY
+           }
+       )
+       current_gas = float(response.json()['result']['SafeGasPrice'])
+       
+       # Get the last 3 days of gas data
+       end_date = datetime.now().strftime('%Y-%m-%d')
+       start_date = (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d')
+       response = requests.get(
+           'https://api.etherscan.io/api',
+           params={
+               'module': 'stats',
+               'action': 'dailygasoracle',
+               'startdate': start_date,
+               'enddate': end_date,
+               'apikey': ETHERSCAN_API_KEY
+           }
+       )
+       
+       recent_gas = [float(day['SafeGasPrice']) for day in response.json()['result']]
+       avg_gas = sum(recent_gas) / len(recent_gas)
+       
+       status = "CHEAP" if current_gas < avg_gas else "EXPENSIVE"
+       
+       return {
+           'price': current_gas,
+           'avg_gas': avg_gas,
+           'status': status
+       }
+   except Exception as e:
+       print(f"Error checking gas: {e}")
+       return None
 
 def check_tvl(client):
-    """Monitor TVL changes in the pool"""
-    query = gql('''
-    {
-        pool(id: "0x109830a1aaad605bbf02a9dfa7b0b92ec2fb7daa") {
-            totalValueLockedUSD
-        }
-    }
-    ''')
+   """Monitor TVL changes in the pool"""
+   global last_tvl
+   query = gql('''
+   {
+       pool(id: "0x109830a1aaad605bbf02a9dfa7b0b92ec2fb7daa") {
+           totalValueLockedUSD
+       }
+   }
+   ''')
 
-    try:
-        result = client.execute(query)
-        current_tvl = float(result['pool']['totalValueLockedUSD'])
-        print(f"[TVL Check] Current TVL: ${current_tvl:,.2f}")
-        return current_tvl
+   try:
+       result = client.execute(query)
+       current_tvl = float(result['pool']['totalValueLockedUSD'])
+       #print(f"[TVL Check] Current TVL: ${current_tvl:,.2f}")
 
-    except Exception as e:
-        print(f"Error checking TVL: {e}")
-        return None
+       if last_tvl is not None:
+           tvl_change = ((current_tvl - last_tvl) / last_tvl) * 100
+           #print(f"[TVL Check] Change: {tvl_change:.2f}%")
+           
+           if abs(tvl_change) >= SIGNIFICANT_TVL_CHANGE * 100:
+               alert_msg = (
+                   "💰 <b>Significant TVL Change</b>\n"
+                   f"Change: {tvl_change:.2f}%\n"
+                   f"Current TVL: ${current_tvl:,.2f}\n"
+                   f"Previous TVL: ${last_tvl:,.2f}"
+               )
+               send_alert(alert_msg)
+
+       last_tvl = current_tvl
+       return current_tvl
+
+   except Exception as e:
+       print(f"Error checking TVL: {e}")
+       return None
 
 def check_position(client):
    """Check position status and alert on significant changes"""
@@ -216,23 +277,41 @@ def check_position(client):
        print(error_msg)
        send_alert(f"🔥 <b>Error</b>\n{error_msg}")
        return None
-   
+
 def main():
-    # Set up the client
-    transport = RequestsHTTPTransport(
-        url=f'https://gateway.thegraph.com/api/{GRAPH_API_KEY}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV',
-        headers={'Content-Type': 'application/json'}
-    )
-    client = Client(transport=transport, fetch_schema_from_transport=False)
+   print("Starting continuous monitoring...")
+   print(f"Monitoring position with range: {MOCK_POSITION['lower_price']:.6f} - {MOCK_POSITION['upper_price']:.6f}")
+   
+   # Set up the client
+   transport = RequestsHTTPTransport(
+       url=f'https://gateway.thegraph.com/api/{os.getenv("GRAPH_API_KEY")}/subgraphs/id/5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV',
+       headers={'Content-Type': 'application/json'}
+   )
+   client = Client(transport=transport, fetch_schema_from_transport=False)
 
-    # Run the functions and display the results
-    gas_status = get_gas_status()
-    if gas_status:
-        print(f"Gas Status: {gas_status}")
+   # Send initial startup message
+   startup_msg = (
+       "🚀 <b>Position Monitor Started</b>\n"
+       f"Monitoring Range: {MOCK_POSITION['lower_price']:.6f} - {MOCK_POSITION['upper_price']:.6f}\n"
+       f"Check Interval: {CHECK_INTERVAL} seconds"
+   )
+   send_alert(startup_msg)
 
-    tvl = check_tvl(client)
-    if tvl:
-        print(f"TVL: {tvl}")
+   while True:
+       try:
+           status = check_position(client)
+           tvl = check_tvl(client)
+           time.sleep(CHECK_INTERVAL)
+       except KeyboardInterrupt:
+           shutdown_msg = "🛑 Monitor stopped by user"
+           send_alert(shutdown_msg)
+           print(shutdown_msg)
+           break
+       except Exception as e:
+           error_msg = f"🔥 Monitor error: {str(e)}"
+           send_alert(error_msg)
+           print(error_msg)
+           time.sleep(CHECK_INTERVAL)
 
 if __name__ == "__main__":
-    main()
+   main()

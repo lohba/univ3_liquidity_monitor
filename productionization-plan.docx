@@ -1,0 +1,27 @@
+Productionization Plan
+
+1. Hosting
+•	Package script in Docker container 
+•	Deploy on AWS ECS (Fargate) 
+•	Store secrets in AWS Secrets Manager 
+•	Basic VPC and security group setup
+
+2. Reliability & Scaling
+•	Run multiple instances for redundancy
+•	Implement automatic restarts
+•	Rate limit API calls (Graph, Etherscan)
+•	Basic error logging and recovery
+
+3. Monitoring
+•	Deploy Grafana for visualization 
+
+Key metrics to track: 
+•	Script uptime
+•	Alert frequency
+•	Pool metrics (price, TVL, volume, gas price)
+
+Multi-channel alerts: 
+•	Telegram (primary)
+•	Email (backup)
+•	Slack (team notifications)
+•	Pager Duty (on-call)
