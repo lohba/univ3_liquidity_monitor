@@ -24,8 +24,6 @@ Given that the wstETH/ETH pool frequently experiences volume changes exceeding 5
 - In the main function's while True loop, exceptions are caught to prevent the script from crashing unexpectedly.
 
 
-
-
 # Setup Instructions
 1. Install the dependencies in the package
 ```
@@ -33,13 +31,13 @@ pip install python-dotenv gql requests python-telegram-bot
 ```
 2. Create Telegram Bot
 
-Open Telegram app
-Search for "@BotFather"
-Click "Start"
-Send "/newbot" command
-Choose bot name (e.g., "My Position Monitor")
-Choose username (must end in 'bot')
-Save the API token BotFather provides
+- Open Telegram app
+- Search for "@BotFather"
+- Click "Start"
+- Send "/newbot" command
+- Choose bot name (e.g., "My Position Monitor")
+- Choose username (must end in 'bot')
+- Save the API token BotFather provides
 
 3. Get Your Chat ID
 
