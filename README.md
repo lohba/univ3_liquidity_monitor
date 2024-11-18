@@ -41,16 +41,16 @@ pip install python-dotenv gql requests python-telegram-bot
 
 3. Get Your Chat ID
 
-Search for your new bot using provided username
-Click "Start" or send "/start"
-Send any message to bot
-Visit: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
-Find "chat":{"id": YOUR_CHAT_ID} in response
+- Search for your new bot using provided username
+- Click "Start" or send "/start"
+- Send any message to bot
+- Visit: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+- Find "chat":{"id": YOUR_CHAT_ID} in response
 
 3. Get API Keys
 
-Etherscan API: https://etherscan.io/apis
-The Graph API: https://thegraph.com/studio/apikeys/
+- Etherscan API: https://etherscan.io/apis
+- The Graph API: https://thegraph.com/studio/apikeys/
 
 4. Create `.env` file with your API keys:
 ```
